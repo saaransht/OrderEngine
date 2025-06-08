@@ -1,6 +1,7 @@
 #include "parser.hpp"
 #include <sstream>
 #include <iostream>
+#include <cctype>
 
 namespace OrderEngine {
 
@@ -22,19 +23,51 @@ std::optional<std::unique_ptr<Order>> OrderParser::parseOrder(const std::string&
             return std::nullopt;
         }
         
-        // Extract values (simplified parsing)
+        // Extract side value (between quotes)
         size_t side_start = json_str.find("\"", side_pos + 7) + 1;
         size_t side_end = json_str.find("\"", side_start);
+        if (side_start == std::string::npos || side_end == std::string::npos) {
+            return std::nullopt;
+        }
         side_str = json_str.substr(side_start, side_end - side_start);
         
-        size_t price_start = json_str.find(":", price_pos + 8) + 1;
+        // Extract price value (after colon, before comma or })
+        size_t price_start = price_pos + 8; // Skip past "price":
+        while (price_start < json_str.length() && 
+               (json_str[price_start] == ' ' || json_str[price_start] == '\t')) {
+            price_start++;
+        }
         size_t price_end = json_str.find_first_of(",}", price_start);
+        if (price_end == std::string::npos) {
+            return std::nullopt;
+        }
         price_str = json_str.substr(price_start, price_end - price_start);
         
-        size_t quantity_start = json_str.find(":", quantity_pos + 11) + 1;
+        // Extract quantity value (after colon, before comma or })
+        size_t quantity_start = quantity_pos + 11; // Skip past "quantity":
+        while (quantity_start < json_str.length() && 
+               (json_str[quantity_start] == ' ' || json_str[quantity_start] == '\t')) {
+            quantity_start++;
+        }
         size_t quantity_end = json_str.find_first_of(",}", quantity_start);
+        if (quantity_end == std::string::npos) {
+            return std::nullopt;
+        }
         quantity_str = json_str.substr(quantity_start, quantity_end - quantity_start);
-        
+
+        // Trim whitespace from extracted strings
+        auto trim = [](std::string& str) {
+            str.erase(0, str.find_first_not_of(" \t\n\r"));
+            str.erase(str.find_last_not_of(" \t\n\r") + 1);
+        };
+        trim(side_str);
+        trim(price_str);
+        trim(quantity_str);
+
+        // Debugging output for malformed input
+        std::cout << "Parsed side: '" << side_str << "', price: '" << price_str 
+                  << "', quantity: '" << quantity_str << "'\n";
+
         OrderSide side = parseOrderSide(side_str);
         double price = std::stod(price_str);
         uint32_t quantity = std::stoul(quantity_str);
