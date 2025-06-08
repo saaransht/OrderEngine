@@ -31,3 +31,14 @@ enable_testing()
 add_executable(test_order_book tests/test_order_book.cpp ${SOURCES})
 target_link_libraries(test_order_book Threads::Threads)
 add_test(NAME OrderBookTests COMMAND test_order_book)
+
+# Create run script
+file(WRITE ${CMAKE_BINARY_DIR}/run_demo.sh 
+"#!/bin/bash\n"
+"echo 'Starting Order Book Engine Demo...'\n"
+"echo 'Connect via: telnet localhost 8080'\n"
+"echo 'Send JSON orders or use console commands'\n"
+"./order_engine 8080\n"
+)
+
+execute_process(COMMAND chmod +x ${CMAKE_BINARY_DIR}/run_demo.sh)

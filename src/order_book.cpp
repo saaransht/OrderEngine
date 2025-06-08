@@ -1,22 +1,70 @@
 #include "order_book.hpp"
 #include <algorithm>
+#include <iostream>
 
 namespace OrderEngine {
 
 OrderBook::OrderBook() = default;
-OrderBook::~OrderBook() = default;
+OrderBook::~OrderBook() {
+    stop();
+}
 
-void OrderBook::addOrder(std::unique_ptr<Order> order) {
+void OrderBook::start() {
+    running_ = true;
+    matching_thread_ = std::thread(&OrderBook::matchingThreadFunc, this);
+}
+
+void OrderBook::stop() {
+    running_ = false;
+    queue_cv_.notify_all();
+    if (matching_thread_.joinable()) {
+        matching_thread_.join();
+    }
+}
+
+void OrderBook::submitOrder(std::unique_ptr<Order> order) {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    order_queue_.push(std::move(order));
+    queue_cv_.notify_one();
+}
+
+void OrderBook::setTradeCallback(TradeCallback callback) {
+    trade_callback_ = std::move(callback);
+}
+
+void OrderBook::matchingThreadFunc() {
+    while (running_ || !order_queue_.empty()) {
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+        queue_cv_.wait(lock, [this] { return !order_queue_.empty() || !running_; });
+        
+        while (!order_queue_.empty()) {
+            auto order = std::move(order_queue_.front());
+            order_queue_.pop();
+            lock.unlock();
+            
+            processOrder(std::move(order));
+            
+            lock.lock();
+        }
+    }
+}
+
+void OrderBook::processOrder(std::unique_ptr<Order> order) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
     if (order->side == OrderSide::BUY) {
         buy_orders_.emplace(order->price, std::move(order));
     } else {
         sell_orders_.emplace(order->price, std::move(order));
     }
+    
     matchOrders();
-}
-
-void OrderBook::setTradeCallback(TradeCallback callback) {
-    trade_callback_ = std::move(callback);
+    
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto latency_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        end_time - start_time).count();
+    
+    latency_stats_.recordLatency(latency_ns);
 }
 
 void OrderBook::matchOrders() {
