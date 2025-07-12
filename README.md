@@ -303,7 +303,7 @@ for (int i = 0; i < 1000000; ++i) {
 ✅ **Exchange compatibility** - Standard price-time priority  
 ✅ **Risk management** - Audit trails, position tracking  
 ✅ **Market data integration** - Real-time feed processing  
-✅ **Regulatory compliance** - Trade reporting, monitoring  
+ 
 
 ---
 
